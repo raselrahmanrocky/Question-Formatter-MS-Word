@@ -1,5 +1,5 @@
 ' =========================================================================
-' Unified Question Paper Formatter (MCQ & CQ)
+' Unified Question Paper Formatter (MCQ & CQ) - Customized Version
 ' Instructions: Copy the entire code block below and paste it into a single 
 '               VBA module in your Word Normal project.
 ' =========================================================================
@@ -48,7 +48,7 @@ Private Sub Execute_MCQ_Formatting()
     ' --- Step 12: Remove Extra Spaces (General Preparation) ---
     Call PerformWildcardReplace("[ ]{2,}", " ")
     
-    ' --- Step 1: Question Number Auto-Align (Hanging Indent) ---
+    ' --- Step 1: Question Number Auto-Align (Hanging Indent: 0.5") ---
     Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", , 0.5)
     
     ' --- Step 8: Convert 4-line Options to 2-line ---
@@ -61,7 +61,7 @@ Private Sub Execute_MCQ_Formatting()
     ' --- Step 14: Roman Numeral Formatting ---
     Call PerformWildcardReplace("(<[ivx]{1,3}\.)[ ]", "\1^t", , 0.5)
     
-    ' --- Step 3: Remove Option Brackets and Set Font ---
+    ' --- Step 3: Remove Option Brackets and Set Font (NesarulOMR) ---
     Call PerformWildcardReplace("\(([" & BenLetters() & "])\)", "\1", "NesarulOMR")
     Call PerformWildcardReplace("([" & BenLetters() & "])\)", "\1", "NesarulOMR")
     
@@ -85,7 +85,7 @@ End Sub
 
 ' =========================================================================
 ' Private Sub: Execute_CQ_Formatting
-' Description: Step-by-step CQ Formatting
+' Description: Step-by-step CQ Formatting (Customized)
 ' =========================================================================
 Private Sub Execute_CQ_Formatting()
     ' --- Step 5: Preserve Tab after Digit and Ddari (General Preparation) ---
@@ -95,27 +95,33 @@ Private Sub Execute_CQ_Formatting()
     Call PerformWildcardReplace("[ ]{2,}", " ")
     
     ' --- Step 1: Question Number Auto-Align (Hanging Indent) ---
-    Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", , 0.5)
+    ' Applied: Alignment = Justify, Hanging Indent = 0.3"
+    Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", "", 0.3, wdAlignParagraphJustify)
     
     ' --- Step 3: Remove Option Brackets and Set Font ---
-    Call PerformWildcardReplace("\(([" & BenLetters() & "])\)", "\1", "NesarulOMR")
+    ' Applied: Left Indent = 0.3", Hanging Indent = 0.3", Brackets Kept, Font unmodified
+    Call PerformWildcardReplace("\(([" & BenLetters() & "])\)", "(\1)", "", 0.3)
     
     ' --- Step 6: Move Marks to the Right ---
-    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}([" & BenDigitsAll() & "]{1,2})", "\1^t\2")
+    ' Applied: Tab Stop Position = 5" (Right Aligned)
+    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}([" & BenDigitsAll() & "]{1,2})", "\1^t\2", "", -1, -1, 5, wdAlignTabRight)
     
     ' --- Step 7: Move Marks in Parentheses to the Right ---
-    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}(\([" & BenDigits() & "]{1,2}\))", "\1^t\2")
+    ' Applied: Tab Stop Position = 5" (Right Aligned, consistent with Step 6)
+    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}(\([" & BenDigits() & "]{1,2}\))", "\1^t\2", "", -1, -1, 5, wdAlignTabRight)
 End Sub
 
 ' =========================================================================
 ' Private Sub: PerformWildcardReplace
-' Description: Helper method that executes search & replace with formatting.
-'              To generate hanging indent, LeftIndent and FirstLineIndent
-'              are set programmatically to bypass VBA property limitations.
+' Description: Expanded helper method supporting custom alignments and 
+'              right tab stops in addition to fonts and indents.
 ' =========================================================================
 Private Sub PerformWildcardReplace(ByVal findTxt As String, ByVal replaceTxt As String, _
     Optional ByVal fontName As String = "", _
-    Optional ByVal hangingIndentVal As Double = -1)
+    Optional ByVal hangingIndentVal As Double = -1, _
+    Optional ByVal alignVal As Long = -1, _
+    Optional ByVal tabStopPos As Double = -1, _
+    Optional ByVal tabStopAlign As WdTabAlignment = wdAlignTabRight)
     
     Dim rng As Range
     Set rng = ActiveDocument.Content
@@ -130,7 +136,7 @@ Private Sub PerformWildcardReplace(ByVal findTxt As String, ByVal replaceTxt As 
         .Wrap = wdFindContinue
         .MatchWildcards = True
         
-        If fontName <> "" Or hangingIndentVal >= 0 Then
+        If fontName <> "" Or hangingIndentVal >= 0 Or alignVal >= 0 Or tabStopPos >= 0 Then
             .Format = True
             If fontName <> "" Then
                 .Replacement.Font.Name = fontName
@@ -138,6 +144,17 @@ Private Sub PerformWildcardReplace(ByVal findTxt As String, ByVal replaceTxt As 
             If hangingIndentVal >= 0 Then
                 .Replacement.ParagraphFormat.LeftIndent = Application.InchesToPoints(hangingIndentVal)
                 .Replacement.ParagraphFormat.FirstLineIndent = Application.InchesToPoints(-hangingIndentVal)
+            End If
+            If alignVal >= 0 Then
+                .Replacement.ParagraphFormat.Alignment = alignVal
+            End If
+            If tabStopPos >= 0 Then
+                ' Clears previous tab stops in the paragraph before setting the new customized Right Tab
+                .Replacement.ParagraphFormat.TabStops.ClearAll
+                .Replacement.ParagraphFormat.TabStops.Add _
+                    Position:=Application.InchesToPoints(tabStopPos), _
+                    Alignment:=tabStopAlign, _
+                    Leader:=wdTabLeaderSpaces
             End If
         Else
             .Format = False

@@ -49,7 +49,7 @@ Private Sub Execute_MCQ_Formatting()
     Call PerformWildcardReplace("[ ]{2,}", " ")
     
     ' --- Step 1: Question Number Auto-Align (Hanging Indent: 0.5") ---
-    Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", , 0.5)
+    Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", , , 0.5)
     
     ' --- Step 8: Convert 4-line Options to 2-line ---
     Call PerformWildcardReplace("(\(" & ChrW(&H995) & "\)*)^13(\(" & ChrW(&H996) & "\)*)^13(\(" & ChrW(&H997) & "\)*)^13(\(" & ChrW(&H998) & "\)*)", "\1^t\2^p\3^t\4")
@@ -59,7 +59,7 @@ Private Sub Execute_MCQ_Formatting()
     Call PerformWildcardReplace("(\(" & ChrW(&H995) & "\)*)(\(" & ChrW(&H996) & "\)*)(\(" & ChrW(&H997) & "\)*)(\(" & ChrW(&H998) & "\)*)", "\1^p\2^p\3^p\4")
     
     ' --- Step 14: Roman Numeral Formatting ---
-    Call PerformWildcardReplace("(<[ivx]{1,3}\.)[ ]", "\1^t", , 0.5)
+    Call PerformWildcardReplace("(<[ivx]{1,3}\.)[ ]", "\1^t", , , 0.5)
     
     ' --- Step 3: Remove Option Brackets and Set Font (NesarulOMR) ---
     Call PerformWildcardReplace("\(([" & BenLetters() & "])\)", "\1", "NesarulOMR")
@@ -96,19 +96,19 @@ Private Sub Execute_CQ_Formatting()
     
     ' --- Step 1: Question Number Auto-Align (Hanging Indent) ---
     ' Applied: Alignment = Justify, Hanging Indent = 0.3"
-    Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", "", 0.3, wdAlignParagraphJustify)
+    Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", "\1" & BenDdari() & "^t", "", , 0.3, wdAlignParagraphJustify)
     
     ' --- Step 3: Remove Option Brackets and Set Font ---
     ' Applied: Left Indent = 0.3", Hanging Indent = 0.3", Brackets Kept, Font unmodified
-    Call PerformWildcardReplace("\(([" & BenLetters() & "])\)", "(\1)", "", 0.3)
+    Call PerformWildcardReplace("\(([" & BenLetters() & "])\)", "(\1)", "", 0.3, 0.3)
     
     ' --- Step 6: Move Marks to the Right ---
     ' Applied: Tab Stop Position = 5" (Right Aligned)
-    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}([" & BenDigitsAll() & "]{1,2})", "\1^t\2", "", -1, -1, 5, wdAlignTabRight)
+    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}([" & BenDigitsAll() & "]{1,2})", "\1^t\2", "", , , -1, 5, wdAlignTabRight)
     
     ' --- Step 7: Move Marks in Parentheses to the Right ---
     ' Applied: Tab Stop Position = 5" (Right Aligned, consistent with Step 6)
-    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}(\([" & BenDigits() & "]{1,2}\))", "\1^t\2", "", -1, -1, 5, wdAlignTabRight)
+    Call PerformWildcardReplace("([\?" & BenDdari() & "])[ ]{1,}(\([" & BenDigits() & "]{1,2}\))", "\1^t\2", "", , , -1, 5, wdAlignTabRight)
 End Sub
 
 ' =========================================================================
@@ -118,6 +118,7 @@ End Sub
 ' =========================================================================
 Private Sub PerformWildcardReplace(ByVal findTxt As String, ByVal replaceTxt As String, _
     Optional ByVal fontName As String = "", _
+    Optional ByVal leftIndentVal As Double = -1, _
     Optional ByVal hangingIndentVal As Double = -1, _
     Optional ByVal alignVal As Long = -1, _
     Optional ByVal tabStopPos As Double = -1, _
@@ -136,13 +137,19 @@ Private Sub PerformWildcardReplace(ByVal findTxt As String, ByVal replaceTxt As 
         .Wrap = wdFindContinue
         .MatchWildcards = True
         
-        If fontName <> "" Or hangingIndentVal >= 0 Or alignVal >= 0 Or tabStopPos >= 0 Then
+        If fontName <> "" Or leftIndentVal >= 0 Or hangingIndentVal >= 0 Or alignVal >= 0 Or tabStopPos >= 0 Then
             .Format = True
             If fontName <> "" Then
                 .Replacement.Font.Name = fontName
             End If
             If hangingIndentVal >= 0 Then
-                .Replacement.ParagraphFormat.LeftIndent = Application.InchesToPoints(hangingIndentVal)
+                Dim finalLeftIndent As Double
+                If leftIndentVal >= 0 Then
+                    finalLeftIndent = leftIndentVal + hangingIndentVal
+                Else
+                    finalLeftIndent = hangingIndentVal
+                End If
+                .Replacement.ParagraphFormat.LeftIndent = Application.InchesToPoints(finalLeftIndent)
                 .Replacement.ParagraphFormat.FirstLineIndent = Application.InchesToPoints(-hangingIndentVal)
             End If
             If alignVal >= 0 Then
@@ -162,6 +169,25 @@ Private Sub PerformWildcardReplace(ByVal findTxt As String, ByVal replaceTxt As 
         
         .Execute Replace:=wdReplaceAll
     End With
+    
+    ' Force-apply paragraph formatting when replacement text equals found text
+    ' (Word skips .Replacement.ParagraphFormat in that case)
+    If hangingIndentVal >= 0 And fontName = "" And alignVal < 0 And tabStopPos < 0 Then
+        Dim fmtRange As Range
+        Set fmtRange = ActiveDocument.Content
+        With fmtRange.Find
+            .ClearFormatting
+            .Text = findTxt
+            .MatchWildcards = True
+            .Forward = True
+            .Wrap = wdFindStop
+            .Format = False
+            Do While .Execute
+                .Parent.ParagraphFormat.LeftIndent = Application.InchesToPoints(finalLeftIndent)
+                .Parent.ParagraphFormat.FirstLineIndent = Application.InchesToPoints(-hangingIndentVal)
+            Loop
+        End With
+    End If
 End Sub
 
 ' =========================================================================

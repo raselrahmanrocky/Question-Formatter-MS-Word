@@ -42,6 +42,60 @@ End Sub
 ' Description: Step-by-step MCQ Formatting
 ' =========================================================================
 Private Sub Execute_MCQ_Formatting()
+    ' --- General: Replace manual line breaks with paragraph marks ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^l"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' --- General: Remove empty paragraphs ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^p^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        Do While .Execute(Replace:=wdReplaceAll)
+        Loop
+    End With
+    
+    ' --- General: Remove trailing whitespace before paragraph breaks ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^w^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' --- General: Remove empty paragraphs (2nd pass, catches new empties from ^w^p) ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^p^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        Do While .Execute(Replace:=wdReplaceAll)
+        Loop
+    End With
+    
     ' --- Step 5: Preserve Tab after Digit and Ddari (General Preparation) ---
     Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "^9", "\1" & BenDdari() & "^t")
     
@@ -88,6 +142,60 @@ End Sub
 ' Description: Step-by-step CQ Formatting (Customized)
 ' =========================================================================
 Private Sub Execute_CQ_Formatting()
+    ' --- General: Replace manual line breaks with paragraph marks ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^l"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' --- General: Remove empty paragraphs ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^p^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        Do While .Execute(Replace:=wdReplaceAll)
+        Loop
+    End With
+    
+    ' --- General: Remove trailing whitespace before paragraph breaks ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^w^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' --- General: Remove empty paragraphs (2nd pass, catches new empties from ^w^p) ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^p^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        Do While .Execute(Replace:=wdReplaceAll)
+        Loop
+    End With
+    
     ' --- Step 5: Preserve Tab after Digit and Ddari (General Preparation) ---
     Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "^9", "\1" & BenDdari() & "^t")
     

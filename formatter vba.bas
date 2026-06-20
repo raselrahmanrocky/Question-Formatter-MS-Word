@@ -129,9 +129,9 @@ Private Sub Execute_MCQ_Formatting()
         If .Execute Then
             Call PerformWildcardReplace(findTxt:="\(([" & BenLetters() & "])\)", replaceTxt:="\1", fontName:="NesarulOMR")
         Else
-            Call PerformWildcardReplace("([" & BenLetters() & "])[.][ ]", "\1")
-            Call PerformWildcardReplace("([" & BenLetters() & "])[ ]{1,}", "\1")
-            Call PerformWildcardReplace("([" & BenLetters() & "])\)", "\1")
+            Call PerformWildcardReplace("([" & BenLetters() & "])[.][ ]", "\1", fontName:="NesarulOMR")
+            Call PerformWildcardReplace("([" & BenLetters() & "])[ ]{1,}", "\1", fontName:="NesarulOMR")
+            Call PerformWildcardReplace("([" & BenLetters() & "])\)", "\1", fontName:="NesarulOMR")
         End If
     End With
     
@@ -142,6 +142,7 @@ Private Sub Execute_MCQ_Formatting()
         If Len(ptxt) > 0 And InStr(ptxt, vbTab) > 0 Then
             If InStr(BenLetters(), Left(ptxt, 1)) > 0 Then
                 p.Range.ParagraphFormat.LeftIndent = Application.InchesToPoints(0.3)
+                p.Range.ParagraphFormat.FirstLineIndent = Application.InchesToPoints(-0.3)
                 p.TabStops.Add Position:=Application.InchesToPoints(2), Alignment:=wdAlignTabLeft
             End If
         End If

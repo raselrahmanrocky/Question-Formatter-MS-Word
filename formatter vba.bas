@@ -113,7 +113,7 @@ Private Sub Execute_MCQ_Formatting()
     Call PerformWildcardReplace("(\(" & ChrW(&H995) & "\))(\(" & ChrW(&H996) & "\))(\(" & ChrW(&H997) & "\))(\(" & ChrW(&H998) & "\))", "\1^p\2^p\3^p\4")
     
     ' --- Step 14: Roman Numeral Formatting ---
-    Call PerformWildcardReplace(findTxt:="(<[ivx]{1,3}\.)[ ]", replaceTxt:="\1^t", hangingIndentVal:=0.3)
+    Call PerformWildcardReplace(findTxt:="(<[ivx]{1,3}\.)[ ]", replaceTxt:="\1^t", leftIndentVal:=0.3, hangingIndentVal:=0.3)
     
     ' --- Step 3: Remove Option Brackets/Dots and Set Font (if-else) ---
     ' Try bracketed (ক) first; if absent, try unbracketed patterns
@@ -135,15 +135,23 @@ Private Sub Execute_MCQ_Formatting()
         End If
     End With
     
-    ' --- Step 3b: Apply left indent + tab stop to merged option lines ---
-    Dim p As Paragraph, ptxt As String
+' --- Step 3b: Apply left indent + tab stop to merged option lines ---
+    Dim p As Paragraph, ptxt As String, firstChar As String
     For Each p In ActiveDocument.Paragraphs
         ptxt = Trim(p.Range.Text)
         If Len(ptxt) > 0 And InStr(ptxt, vbTab) > 0 Then
-            If InStr(BenLetters(), Left(ptxt, 1)) > 0 Then
-                p.Range.ParagraphFormat.LeftIndent = Application.InchesToPoints(0.3)
-                p.Range.ParagraphFormat.FirstLineIndent = Application.InchesToPoints(-0.3)
-                p.TabStops.Add Position:=Application.InchesToPoints(2), Alignment:=wdAlignTabLeft
+            firstChar = Left(ptxt, 1)
+            If firstChar = "(" Then
+                firstChar = Mid(ptxt, 2, 1)
+            End If
+            
+            If InStr(BenLetters(), firstChar) > 0 Then
+                With p.Range.ParagraphFormat
+                    .LeftIndent = Application.InchesToPoints(0.6)
+                    .FirstLineIndent = Application.InchesToPoints(-0.3)
+                    .TabStops.ClearAll
+                    .TabStops.Add Position:=Application.InchesToPoints(2), Alignment:=wdAlignTabLeft
+                End With
             End If
         End If
     Next

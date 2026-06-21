@@ -1,4 +1,21 @@
 ' =========================================================================
+' Unified Question Paper Formatter (MCQ & CQ) with Auto-Shortcut
+' Shortcut Key: Ctrl + Alt + Q
+' =========================================================================
+
+Sub AutoExec()
+    On Error Resume Next
+    Application.CustomizationContext = NormalTemplate
+    KeyBindings.Add KeyCode:=BuildKeyCode(wdKeyControl, wdKeyAlt, wdKeyQ), _
+        KeyCategory:=wdKeyCategoryMacro, Command:="Format_Question_Paper"
+End Sub
+
+Sub SetShortcutNow()
+    Call AutoExec
+    MsgBox "Shortcut Ctrl+Alt+Q has been assigned to the Macro.", vbInformation
+End Sub
+
+' =========================================================================
 ' Unified Question Paper Formatter (MCQ & CQ) - Customized Version
 ' Instructions: Copy the entire code block below and paste it into a single 
 '               VBA module in your Word Normal project.

@@ -116,24 +116,16 @@ Private Sub Execute_MCQ_Formatting()
     Call PerformWildcardReplace(findTxt:="(<[ivx]{1,3}\.)[ ]", replaceTxt:="\1^t", leftIndentVal:=0.3, hangingIndentVal:=0.3)
     
     ' --- Step 3: Remove Option Brackets/Dots and Set Font (if-else) ---
-    ' Try bracketed (ক) first; if absent, try unbracketed patterns
-    Dim rngFind As Range
-    Set rngFind = ActiveDocument.Content
-    With rngFind.Find
-        .ClearFormatting
-        .Text = "\(([" & BenLetters() & "])\)"
-        .MatchWildcards = True
-        .Forward = True
-        .Wrap = wdFindStop
-        .Format = False
-        If .Execute Then
-            Call PerformWildcardReplace(findTxt:="\(([" & BenLetters() & "])\)", replaceTxt:="\1", fontName:="NesarulOMR")
-        Else
-            Call PerformWildcardReplace("([" & BenLetters() & "])[.][ ]", "\1", fontName:="NesarulOMR")
-            Call PerformWildcardReplace("([" & BenLetters() & "])[ ]{1,}", "\1", fontName:="NesarulOMR")
-            Call PerformWildcardReplace("([" & BenLetters() & "])\)", "\1", fontName:="NesarulOMR")
-        End If
-    End With
+    ' Use PatternExists to determine which format is present, then apply only that one
+    If PatternExists("\(([" & BenLetters() & "])\)") Then
+        Call PerformWildcardReplace(findTxt:="\(([" & BenLetters() & "])\)", replaceTxt:="\1", fontName:="NesarulOMR")
+    ElseIf PatternExists("([" & BenLetters() & "])[.][ ]") Then
+        Call PerformWildcardReplace("([" & BenLetters() & "])[.][ ]", "\1", fontName:="NesarulOMR")
+    ElseIf PatternExists("([" & BenLetters() & "])[ ]{1,}") Then
+        Call PerformWildcardReplace("([" & BenLetters() & "])[ ]{1,}", "\1", fontName:="NesarulOMR")
+    Else
+        Call PerformWildcardReplace("([" & BenLetters() & "])\)", "\1", fontName:="NesarulOMR")
+    End If
     
 ' --- Step 3b: Apply left indent + tab stop to merged option lines ---
     Dim p As Paragraph, ptxt As String, firstChar As String
@@ -455,4 +447,22 @@ Private Function BenDigitsAll() As String
     BenDigitsAll = ChrW(&H9E7) & ChrW(&H9E8) & ChrW(&H9E9) & ChrW(&H9EA) & _
                    ChrW(&H9EB) & ChrW(&H9EC) & ChrW(&H9ED) & ChrW(&H9EE) & _
                    ChrW(&H9EF) & ChrW(&H9E6)
+End Function
+
+' =========================================================================
+' Private Function: PatternExists
+' Description: Checks if a specific wildcard pattern exists anywhere in the document
+' =========================================================================
+Private Function PatternExists(ByVal pattern As String) As Boolean
+    Dim rng As Range
+    Set rng = ActiveDocument.Content
+    With rng.Find
+        .ClearFormatting
+        .Text = pattern
+        .MatchWildcards = True
+        .Forward = True
+        .Wrap = wdFindStop
+        .Format = False
+        PatternExists = .Execute
+    End With
 End Function

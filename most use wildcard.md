@@ -69,7 +69,7 @@ Replace with:
 \(([কখগঘ])\)
 ```
 
-ক খ গ ঘ এগুলোর পর যদি . থাকে তাহলে
+ক খ গ ঘ এগুলোর পর যদি . থাকে যেমন: ক., খ. তাহলে ↓
 Find What:
 
 ```text
@@ -82,7 +82,7 @@ Replace with:
 \1
 ```
 
-7.  ভুল বশত left stop tab set করলে পুনরায় আবার set করার নিয়ম
+6.  ভুল বশত left stop tab set করলে পুনরায় আবার set করার নিয়ম
     অব্যশই tab option থেকে 2 বা 3 সিলেক্ট করবেন বা ইচ্ছেমত পজিশন দিতে পারেন
 
 Find What:
@@ -96,6 +96,20 @@ Replace:
 ```text
 \1^t\2\3^t\4
 ```
+৭.  ক →tab→ গ, গ →tab→ ঘ এখানে ক ও গ লাইনের শুরুতে hangign indent ব্যবহার করতে
+
+Find What:
+
+```text
+(\(ক\)*)^t(\(খ\)*)^13(\(গ\)*)^t(\(ঘ\)*)
+```
+
+Replace with: (keep blank if user Indent or Hanging)
+
+```text
+
+```
+
 
 𝐅𝐨𝐫  𝐂𝐐:
 

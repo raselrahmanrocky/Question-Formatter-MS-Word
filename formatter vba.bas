@@ -120,6 +120,17 @@ Private Sub Execute_MCQ_Formatting()
         .Execute Replace:=wdReplaceAll
     End With
     
+    ' --- Step 0: Convert 1-line options to 2-line with tabs (bracketed or unbracketed) ---
+    If PatternExists("[ ]{1,}\(" & ChrW(&H997) & "\)") Then
+        Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H997) & "\)", "^p(" & ChrW(&H997) & ")")
+        Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H996) & "\)", "^t(" & ChrW(&H996) & ")")
+        Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H998) & "\)", "^t(" & ChrW(&H998) & ")")
+    Else
+        Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H997) & "[.]", "^p" & ChrW(&H997))
+        Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H996) & "[.]", "^t" & ChrW(&H996))
+        Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H998) & "[.]", "^t" & ChrW(&H998))
+    End If
+    
     ' --- Step 1: Question Number Auto-Align (Hanging Indent: 0.3") ---
     Call PerformWildcardReplace(findTxt:="([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", replaceTxt:="\1" & BenDdari() & "^t", hangingIndentVal:=0.3)
     

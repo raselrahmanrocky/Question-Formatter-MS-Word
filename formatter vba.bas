@@ -1,3 +1,6 @@
+' V2.6.0 — Last updated: 2026-06-26
+Private Const APP_VERSION As String = "V2.6.0"
+
 ' =========================================================================
 ' Unified Question Paper Formatter (MCQ & CQ) with Auto-Shortcut
 ' Shortcut Key: Ctrl + Alt + Q
@@ -12,7 +15,7 @@ End Sub
 
 Sub SetShortcutNow()
     Call AutoExec
-    MsgBox "Shortcut Ctrl+Alt+Q has been assigned to the Macro.", vbInformation
+    MsgBox "Shortcut Ctrl+Alt+Q has been assigned to the Macro.", vbInformation, "Shortcut - " & APP_VERSION
 End Sub
 
 ' =========================================================================
@@ -34,32 +37,32 @@ Sub Format_Question_Paper()
     userInput = InputBox("Please enter a number to select formatting type:" & vbNewLine & vbNewLine & _
                          "Type 1 : MCQ (Multiple Choice Questions)" & vbNewLine & _
                          "Type 2 : CQ (Creative Questions)" & vbNewLine & vbNewLine & _
-                         "Leave blank or click Cancel to exit.", "Select Question Type")
+                         "Leave blank or click Cancel to exit.", "Select Question Type - " & APP_VERSION)
                          
     ' Input verification and routing
     If Trim(userInput) = "1" Then
         Application.ScreenUpdating = False
         Call Execute_MCQ_Formatting
         Application.ScreenUpdating = True
-        MsgBox "MCQ Formatting completed successfully!", vbInformation, "Completed"
+        MsgBox "MCQ Formatting completed successfully!", vbInformation, "Completed - " & APP_VERSION
         
     ElseIf Trim(userInput) = "2" Then
         Application.ScreenUpdating = False
         Call Execute_CQ_Formatting
         Application.ScreenUpdating = True
-        MsgBox "CQ Formatting completed successfully!", vbInformation, "Completed"
+        MsgBox "CQ Formatting completed successfully!", vbInformation, "Completed - " & APP_VERSION
         
     ElseIf Trim(userInput) = "" Then
-        MsgBox "Formatting process canceled.", vbInformation, "Canceled"
+        MsgBox "Formatting process canceled.", vbInformation, "Canceled - " & APP_VERSION
     Else
-        MsgBox "Invalid choice! Please enter either 1 or 2.", vbExclamation, "Error"
+        MsgBox "Invalid choice! Please enter either 1 or 2.", vbExclamation, "Error - " & APP_VERSION
     End If
     
     Exit Sub
 ErrHandler:
     Application.ScreenUpdating = True
     MsgBox "Error " & Err.Number & ": " & Err.Description & vbNewLine & vbNewLine & _
-           "The macro was interrupted. Screen has been restored.", vbCritical, "Formatting Error"
+           "The macro was interrupted. Screen has been restored.", vbCritical, "Formatting Error - " & APP_VERSION
 End Sub
 
 ' =========================================================================
@@ -81,44 +84,8 @@ Private Sub Execute_MCQ_Formatting()
         .Execute Replace:=wdReplaceAll
     End With
     
-    ' --- General: Remove empty paragraphs (single-pass ^13^13@, no loop, avoids hang) ---
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Replacement.ClearFormatting
-        .Text = "^13^13@"
-        .Replacement.Text = "^13"
-        .Forward = True
-        .Wrap = wdFindContinue
-        .Format = False
-        .MatchWildcards = True
-        .Execute Replace:=wdReplaceAll
-    End With
-    
-    ' --- General: Remove trailing whitespace before paragraph breaks ---
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Replacement.ClearFormatting
-        .Text = "^w^p"
-        .Replacement.Text = "^p"
-        .Forward = True
-        .Wrap = wdFindContinue
-        .Format = False
-        .MatchWildcards = False
-        .Execute Replace:=wdReplaceAll
-    End With
-    
-    ' --- General: Remove empty paragraphs (2nd pass, catches new empties from ^w^p) ---
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Replacement.ClearFormatting
-        .Text = "^13^13@"
-        .Replacement.Text = "^13"
-        .Forward = True
-        .Wrap = wdFindContinue
-        .Format = False
-        .MatchWildcards = True
-        .Execute Replace:=wdReplaceAll
-    End With
+    ' --- General: Clean redundant empty paragraphs ---
+    Call GeneralCleanup
     
     ' --- Step 0: Convert 1-line options to 2-line with tabs (style-blind) ---
     ' Split গ to new line: handles (গ), গ., গ), and bare গ (safe: requires space after)
@@ -157,9 +124,12 @@ Private Sub Execute_MCQ_Formatting()
     ' --- Step 3: Position-based label cleanup and font formatting ---
     Call FormatMCQLabels
     
+    ' --- Step 4: Stimulus paragraph indent ---
+    Call FormatStimulusIndent
+    
     Exit Sub
 MCQErr:
-    MsgBox "Error " & Err.Number & " at MCQ Step " & Err.Description, vbExclamation, "MCQ Error"
+    MsgBox "Error " & Err.Number & " at MCQ Step " & Err.Description, vbExclamation, "MCQ Error - " & APP_VERSION
 End Sub
 
 ' =========================================================================
@@ -181,44 +151,8 @@ Private Sub Execute_CQ_Formatting()
         .Execute Replace:=wdReplaceAll
     End With
     
-    ' --- General: Remove empty paragraphs (single-pass ^13^13@, no loop, avoids hang) ---
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Replacement.ClearFormatting
-        .Text = "^13^13@"
-        .Replacement.Text = "^13"
-        .Forward = True
-        .Wrap = wdFindContinue
-        .Format = False
-        .MatchWildcards = True
-        .Execute Replace:=wdReplaceAll
-    End With
-    
-    ' --- General: Remove trailing whitespace before paragraph breaks ---
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Replacement.ClearFormatting
-        .Text = "^w^p"
-        .Replacement.Text = "^p"
-        .Forward = True
-        .Wrap = wdFindContinue
-        .Format = False
-        .MatchWildcards = False
-        .Execute Replace:=wdReplaceAll
-    End With
-    
-    ' --- General: Remove empty paragraphs (2nd pass, catches new empties from ^w^p) ---
-    With ActiveDocument.Content.Find
-        .ClearFormatting
-        .Replacement.ClearFormatting
-        .Text = "^13^13@"
-        .Replacement.Text = "^13"
-        .Forward = True
-        .Wrap = wdFindContinue
-        .Format = False
-        .MatchWildcards = True
-        .Execute Replace:=wdReplaceAll
-    End With
+    ' --- General: Clean redundant empty paragraphs ---
+    Call GeneralCleanup
     
     ' --- Step 5: Preserve Tab after Digit and Ddari (General Preparation) ---
     Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "^9", "\1" & BenDdari() & "^t")
@@ -241,9 +175,13 @@ Private Sub Execute_CQ_Formatting()
     ' --- Step 7: Move Marks in Parentheses to the Right ---
     ' Applied: Tab Stop Position = 5" (Right Aligned, consistent with Step 6)
     Call PerformWildcardReplace(findTxt:="([\?" & BenDdari() & "])[ ]{1,}(\([" & BenDigits() & "]{1,2}\))", replaceTxt:="\1^t\2", tabStopPos:=5, tabStopAlign:=wdAlignTabRight)
+    
+    ' --- Step 8: Stimulus paragraph indent ---
+    Call FormatStimulusIndent
+    
     Exit Sub
 CQErr:
-    MsgBox "Error " & Err.Number & " at CQ Step " & Err.Description, vbExclamation, "CQ Error"
+    MsgBox "Error " & Err.Number & " at CQ Step " & Err.Description, vbExclamation, "CQ Error - " & APP_VERSION
 End Sub
 
 ' =========================================================================
@@ -501,6 +439,49 @@ NextPara:
 End Sub
 
 ' =========================================================================
+' Private Sub: FormatStimulusIndent
+' Description: Finds trigger paragraphs ending with ":" and applies 0.3"
+'              left indent + justified alignment to the next paragraph.
+'              Skips if next paragraph starts with a Bengali digit (০-৯).
+' =========================================================================
+Private Sub FormatStimulusIndent()
+    Dim i As Long
+    Dim paraText As String
+    Dim firstCh As String
+    
+    For i = 1 To ActiveDocument.Paragraphs.Count - 1
+        paraText = Trim(ActiveDocument.Paragraphs(i).Range.Text)
+        Do While Len(paraText) > 0 And (Right(paraText, 1) = vbCr Or Right(paraText, 1) = vbLf)
+            paraText = Left(paraText, Len(paraText) - 1)
+        Loop
+        
+        ' Trigger: paragraph ends with colon
+        If Right(paraText, 1) = ":" Then
+            Dim target As Paragraph
+            Set target = ActiveDocument.Paragraphs(i + 1)
+            
+            ' Boundary check: skip if next para starts with Bengali digit ০-৯
+            Dim nextText As String
+            nextText = Trim(target.Range.Text)
+            If Len(nextText) > 0 Then
+                firstCh = Left(nextText, 1)
+                If firstCh >= ChrW(&H9E6) And firstCh <= ChrW(&H9EF) Then
+                    GoTo NextPara
+                End If
+            End If
+            
+            ' Apply: 0.3" left indent, no first-line indent, justified
+            With target.Range.ParagraphFormat
+                .LeftIndent = Application.InchesToPoints(0.3)
+                .FirstLineIndent = 0
+                .Alignment = wdAlignParagraphJustify
+            End With
+        End If
+NextPara:
+    Next i
+End Sub
+
+' =========================================================================
 ' Private Sub: PerformWildcardReplace
 ' Description: Expanded helper method supporting custom alignments and 
 '              right tab stops in addition to fonts and indents.
@@ -637,3 +618,72 @@ Private Function PatternExists(ByVal pattern As String) As Boolean
         PatternExists = .Execute
     End With
 End Function
+
+' =========================================================================
+' Private Sub: GeneralCleanup
+' Description: Removes redundant empty paragraphs including invisible
+'              whitespace between them and leading/trailing empty paras.
+'              3-phase find/replace (no wildcards) + start/end check.
+' =========================================================================
+Private Sub GeneralCleanup()
+    ' Phase 1: Remove trailing whitespace before paragraph breaks
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^w^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' Phase 2: Remove whitespace between paragraph marks (^13[space]^13 → ^13^13)
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^p^w"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' Phase 3: Collapse 2+ consecutive paragraph marks into 1 (loop, no wildcards)
+    Dim safety As Long
+    safety = 0
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^p^p"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        Do While .Execute(Replace:=wdReplaceAll) And safety < 100
+            safety = safety + 1
+        Loop
+    End With
+    
+    ' Phase 4: Clean leading empty paragraph
+    If ActiveDocument.Paragraphs.Count >= 2 Then
+        Dim firstText As String
+        firstText = Trim(ActiveDocument.Paragraphs(1).Range.Text)
+        If Len(firstText) = 0 Then
+            ActiveDocument.Paragraphs(1).Range.Delete
+        End If
+    End If
+    
+    ' Phase 5: Clean trailing empty paragraphs
+    If ActiveDocument.Paragraphs.Count >= 2 Then
+        Dim lastText As String
+        lastText = Trim(ActiveDocument.Paragraphs(ActiveDocument.Paragraphs.Count).Range.Text)
+        If Len(lastText) = 0 Then
+            ActiveDocument.Paragraphs(ActiveDocument.Paragraphs.Count).Range.Delete
+        End If
+    End If
+End Sub

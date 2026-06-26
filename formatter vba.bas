@@ -164,9 +164,8 @@ Private Sub Execute_CQ_Formatting()
     ' Applied: Alignment = Justify, Hanging Indent = 0.3"
     Call PerformWildcardReplace(findTxt:="([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", replaceTxt:="\1" & BenDdari() & "^t", hangingIndentVal:=0.3, alignVal:=wdAlignParagraphJustify)
     
-    ' --- Step 3: Remove Option Brackets and Set Font ---
-    ' Applied: Left Indent = 0.3", Hanging Indent = 0.3", Brackets Kept, Font unmodified
-    Call PerformWildcardReplace(findTxt:="\(([" & BenLetters() & "])\)", replaceTxt:="(\1)", leftIndentVal:=0.3, hangingIndentVal:=0.3)
+    ' --- Step 3: Format CQ sub-question labels (ক, খ, গ, ঘ) with tab + hanging indent ---
+    Call FormatCQLabels
     
     ' --- Step 6: Move Marks to the Right ---
     ' Applied: Tab Stop Position = 5" (Right Aligned)
@@ -431,6 +430,84 @@ NextTab:
                 .FirstLineIndent = Application.InchesToPoints(-0.3)
                 .TabStops.ClearAll
                 .TabStops.Add Position:=Application.InchesToPoints(2), Alignment:=wdAlignTabLeft
+            End With
+        End If
+        
+NextPara:
+    Next para
+End Sub
+
+' =========================================================================
+' Private Sub: FormatCQLabels
+' Description: Paragraph-loop approach to detect CQ sub-question labels
+'              (ক, খ, গ, ঘ) at position 0 in all decoration styles:
+'              (ক), ক., খ), গ (bare with space). Inserts a tab after the
+'              label delimiter so hanging indent works correctly.
+' =========================================================================
+Private Sub FormatCQLabels()
+    Dim para As Paragraph
+    Dim ptxt As String
+    Dim rng As Range
+    Dim letters As String
+    Dim foundLabel As Boolean
+    Dim firstCh As String, secondCh As String, thirdCh As String, fourthCh As String
+    
+    letters = BenLetters()
+    
+    For Each para In ActiveDocument.Paragraphs
+        ptxt = para.Range.Text
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        If Len(ptxt) = 0 Then GoTo NextPara
+        
+        foundLabel = False
+        firstCh = Left(ptxt, 1)
+        secondCh = Mid(ptxt, 2, 1)
+        thirdCh = Mid(ptxt, 3, 1)
+        fourthCh = Mid(ptxt, 4, 1)
+        
+        Set rng = para.Range
+        
+        ' Pattern 1: (ক) — opening paren + letter + closing paren at position 0
+        If firstCh = "(" And InStr(letters, secondCh) > 0 And thirdCh = ")" _
+           And IsValidLabelNextChar(fourthCh) Then
+            rng.Start = rng.Start + 3
+            rng.End = rng.Start
+            If fourthCh = " " Then
+                rng.End = rng.Start + 1
+            End If
+            rng.Text = vbTab
+            foundLabel = True
+        End If
+        
+        ' Pattern 2: ক. or খ) — letter + dot or closing paren at position 0
+        If Not foundLabel And InStr(letters, firstCh) > 0 _
+           And (secondCh = "." Or secondCh = ")") _
+           And IsValidLabelNextChar(thirdCh) Then
+            rng.Start = rng.Start + 2
+            rng.End = rng.Start
+            If thirdCh = " " Then
+                rng.End = rng.Start + 1
+            End If
+            rng.Text = vbTab
+            foundLabel = True
+        End If
+        
+        ' Pattern 3: গ (bare letter followed by space at position 0)
+        If Not foundLabel And InStr(letters, firstCh) > 0 _
+           And secondCh = " " Then
+            rng.Start = rng.Start + 1
+            rng.End = rng.Start + 1
+            rng.Text = vbTab
+            foundLabel = True
+        End If
+        
+        If foundLabel Then
+            With para.Range.ParagraphFormat
+                .LeftIndent = Application.InchesToPoints(0.6)
+                .FirstLineIndent = Application.InchesToPoints(-0.3)
+                .Alignment = wdAlignParagraphJustify
             End With
         End If
         

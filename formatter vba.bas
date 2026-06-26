@@ -120,16 +120,27 @@ Private Sub Execute_MCQ_Formatting()
         .Execute Replace:=wdReplaceAll
     End With
     
-    ' --- Step 0: Convert 1-line options to 2-line with tabs (bracketed or unbracketed) ---
-    If PatternExists("[ ]{1,}\(" & ChrW(&H997) & "\)") Then
-        Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H997) & "\)", "^p(" & ChrW(&H997) & ")")
-        Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H996) & "\)", "^t(" & ChrW(&H996) & ")")
-        Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H998) & "\)", "^t(" & ChrW(&H998) & ")")
-    Else
-        Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H997) & "[.]", "^p" & ChrW(&H997))
-        Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H996) & "[.]", "^t" & ChrW(&H996))
-        Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H998) & "[.]", "^t" & ChrW(&H998))
-    End If
+    ' --- Step 0: Convert 1-line options to 2-line with tabs (style-blind) ---
+    ' Split গ to new line: handles (গ), গ., গ), and bare গ (safe: requires space after)
+    Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H997) & "\)", "^p" & ChrW(&H997))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H997) & "\.", "^p" & ChrW(&H997))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H997) & "\)", "^p" & ChrW(&H997))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H997) & "[ ]", "^p" & ChrW(&H997) & " ")
+    
+    ' Move খ to column 2: handles (খ), খ., খ), and bare খ (safe: requires space after)
+    Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H996) & "\)", "^t" & ChrW(&H996))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H996) & "\.", "^t" & ChrW(&H996))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H996) & "\)", "^t" & ChrW(&H996))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H996) & "[ ]", "^t" & ChrW(&H996) & " ")
+    
+    ' Move ঘ to column 2: handles (ঘ), ঘ., ঘ), and bare ঘ (safe: requires space after)
+    Call PerformWildcardReplace("[ ]{1,}\(" & ChrW(&H998) & "\)", "^t" & ChrW(&H998))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H998) & "\.", "^t" & ChrW(&H998))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H998) & "\)", "^t" & ChrW(&H998))
+    Call PerformWildcardReplace("[ ]{1,}" & ChrW(&H998) & "[ ]", "^t" & ChrW(&H998) & " ")
+    
+    ' Clean stray ) after splits (^13 in find, ^p in replace)
+    Call PerformWildcardReplace("^13\)", "^p")
     
     ' --- Step 1: Question Number Auto-Align (Hanging Indent: 0.3") ---
     Call PerformWildcardReplace(findTxt:="([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", replaceTxt:="\1" & BenDdari() & "^t", hangingIndentVal:=0.3)
@@ -143,38 +154,8 @@ Private Sub Execute_MCQ_Formatting()
     ' --- Step 14: Roman Numeral Formatting ---
     Call PerformWildcardReplace(findTxt:="(<[ivx]{1,3}\.)[ ]", replaceTxt:="\1^t", leftIndentVal:=0.3, hangingIndentVal:=0.3)
     
-    ' --- Step 3: Remove Option Brackets/Dots and Set Font (if-else) ---
-    ' Use PatternExists to determine which format is present, then apply only that one
-    If PatternExists("\(([" & BenLetters() & "])\)") Then
-        Call PerformWildcardReplace(findTxt:="\(([" & BenLetters() & "])\)", replaceTxt:="\1", fontName:="NesarulOMR")
-    ElseIf PatternExists("([" & BenLetters() & "])[.][ ]") Then
-        Call PerformWildcardReplace("([" & BenLetters() & "])[.][ ]", "\1", fontName:="NesarulOMR")
-    ElseIf PatternExists("([" & BenLetters() & "])[ ]{1,}") Then
-        Call PerformWildcardReplace("([" & BenLetters() & "])[ ]{1,}", "\1", fontName:="NesarulOMR")
-    Else
-        Call PerformWildcardReplace("([" & BenLetters() & "])\)", "\1", fontName:="NesarulOMR")
-    End If
-    
-' --- Step 3b: Apply left indent + tab stop to merged option lines ---
-    Dim p As Paragraph, ptxt As String, firstChar As String
-    For Each p In ActiveDocument.Paragraphs
-        ptxt = Trim(p.Range.Text)
-        If Len(ptxt) > 0 And InStr(ptxt, vbTab) > 0 Then
-            firstChar = Left(ptxt, 1)
-            If firstChar = "(" Then
-                firstChar = Mid(ptxt, 2, 1)
-            End If
-            
-            If InStr(BenLetters(), firstChar) > 0 Then
-                With p.Range.ParagraphFormat
-                    .LeftIndent = Application.InchesToPoints(0.6)
-                    .FirstLineIndent = Application.InchesToPoints(-0.3)
-                    .TabStops.ClearAll
-                    .TabStops.Add Position:=Application.InchesToPoints(2), Alignment:=wdAlignTabLeft
-                End With
-            End If
-        End If
-    Next
+    ' --- Step 3: Position-based label cleanup and font formatting ---
+    Call FormatMCQLabels
     
     Exit Sub
 MCQErr:
@@ -370,6 +351,156 @@ NextMerge:
 End Sub
 
 ' =========================================================================
+' Private Sub: FormatMCQLabels
+' Description: Paragraph-loop approach to strip decoration and apply
+'              NesarulOMR font to MCQ labels (ক, খ, গ, ঘ). Labels are
+'              identified ONLY at position 0 or after a tab, preventing
+'              false positives inside words (e.g. পরিবর্তক, দ্বিপাক্ষিক).
+'              Also applies paragraph formatting (indent, tab stop).
+' =========================================================================
+Private Sub FormatMCQLabels()
+    Dim para As Paragraph
+    Dim rngPara As Range
+    Dim ptxt As String
+    Dim letters As String
+    Dim foundLabel As Boolean
+    Dim i As Long, j As Long
+    Dim paraStart As Long
+    Dim chkPos As Long
+    Dim ch1 As String, ch2 As String, ch3 As String
+    Dim labelData() As Variant
+    Dim lblCount As Long
+    
+    letters = BenLetters()
+    
+    For Each para In ActiveDocument.Paragraphs
+        Set rngPara = para.Range
+        ptxt = rngPara.Text
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        If Len(ptxt) = 0 Then GoTo NextPara
+        
+        paraStart = rngPara.Start
+        foundLabel = False
+        lblCount = 0
+        ReDim labelData(1 To 10, 1 To 4)
+        
+        ' --- Check position 1 (start of paragraph) ---
+        chkPos = 1
+        If chkPos <= Len(ptxt) Then
+            ch1 = Mid(ptxt, chkPos, 1)
+            ch2 = Mid(ptxt, chkPos + 1, 1)
+            ch3 = Mid(ptxt, chkPos + 2, 1)
+            
+            ' (ক) at start (with lookahead: 다음 문자는 유효한 구분 기호여야 함)
+            If ch1 = "(" And ch2 <> "" And InStr(letters, ch2) > 0 And ch3 = ")" _
+               And IsValidLabelNextChar(Mid(ptxt, chkPos + 3, 1)) Then
+                lblCount = lblCount + 1
+                If lblCount > UBound(labelData, 1) Then ReDim Preserve labelData(1 To lblCount + 10, 1 To 4)
+                labelData(lblCount, 1) = chkPos + 1
+                labelData(lblCount, 2) = True
+                labelData(lblCount, 3) = True
+                labelData(lblCount, 4) = ")"
+                foundLabel = True
+                GoTo CheckTabs
+            End If
+            
+            ' ক, ক., ক), bare ক at start (lookahead: prevents গতি/কোন matches)
+            If InStr(letters, ch1) > 0 And IsValidLabelNextChar(ch2) Then
+                lblCount = lblCount + 1
+                If lblCount > UBound(labelData, 1) Then ReDim Preserve labelData(1 To lblCount + 10, 1 To 4)
+                labelData(lblCount, 1) = chkPos
+                labelData(lblCount, 2) = False
+                If ch2 = "." Or ch2 = ")" Then
+                    labelData(lblCount, 3) = True
+                    labelData(lblCount, 4) = ch2
+                Else
+                    labelData(lblCount, 3) = False
+                    labelData(lblCount, 4) = ""
+                End If
+                foundLabel = True
+            End If
+        End If
+        
+CheckTabs:
+        ' --- Check positions after each tab ---
+        For i = 1 To Len(ptxt)
+            If Mid(ptxt, i, 1) = vbTab Then
+                chkPos = i + 1
+                If chkPos <= Len(ptxt) Then
+                    ch1 = Mid(ptxt, chkPos, 1)
+                    ch2 = Mid(ptxt, chkPos + 1, 1)
+                    ch3 = Mid(ptxt, chkPos + 2, 1)
+                    
+                    ' (ক) after tab (with lookahead)
+                    If ch1 = "(" And ch2 <> "" And InStr(letters, ch2) > 0 And ch3 = ")" _
+                       And IsValidLabelNextChar(Mid(ptxt, chkPos + 3, 1)) Then
+                        lblCount = lblCount + 1
+                        If lblCount > UBound(labelData, 1) Then ReDim Preserve labelData(1 To lblCount + 10, 1 To 4)
+                        labelData(lblCount, 1) = chkPos + 1
+                        labelData(lblCount, 2) = True
+                        labelData(lblCount, 3) = True
+                        labelData(lblCount, 4) = ")"
+                        foundLabel = True
+                        GoTo NextTab
+                    End If
+                    
+                    ' ক, ক., ক), bare ক after tab (with lookahead)
+                    If InStr(letters, ch1) > 0 And IsValidLabelNextChar(ch2) Then
+                        lblCount = lblCount + 1
+                        If lblCount > UBound(labelData, 1) Then ReDim Preserve labelData(1 To lblCount + 10, 1 To 4)
+                        labelData(lblCount, 1) = chkPos
+                        labelData(lblCount, 2) = False
+                        If ch2 = "." Or ch2 = ")" Then
+                            labelData(lblCount, 3) = True
+                            labelData(lblCount, 4) = ch2
+                        Else
+                            labelData(lblCount, 3) = False
+                            labelData(lblCount, 4) = ""
+                        End If
+                        foundLabel = True
+                    End If
+                End If
+NextTab:
+            End If
+        Next i
+        
+        ' Process labels in reverse order (high-to-low) to keep positions stable
+        For j = lblCount To 1 Step -1
+            Dim docLabelPos As Long
+            docLabelPos = paraStart + labelData(j, 1) - 1
+            
+            ' Delete trailing ) or .
+            If labelData(j, 3) Then
+                rngPara.Document.Range(docLabelPos + 1, docLabelPos + 2).Delete
+            End If
+            
+            ' Delete leading (
+            If labelData(j, 2) Then
+                rngPara.Document.Range(docLabelPos - 1, docLabelPos).Delete
+                docLabelPos = docLabelPos - 1
+            End If
+            
+            ' Apply NesarulOMR font to the single label character only
+            rngPara.Document.Range(docLabelPos, docLabelPos + 1).Font.Name = "NesarulOMR"
+        Next j
+        
+        ' Apply paragraph formatting
+        If foundLabel Then
+            With rngPara.ParagraphFormat
+                .LeftIndent = Application.InchesToPoints(0.6)
+                .FirstLineIndent = Application.InchesToPoints(-0.3)
+                .TabStops.ClearAll
+                .TabStops.Add Position:=Application.InchesToPoints(2), Alignment:=wdAlignTabLeft
+            End With
+        End If
+        
+NextPara:
+    Next para
+End Sub
+
+' =========================================================================
 ' Private Sub: PerformWildcardReplace
 ' Description: Expanded helper method supporting custom alignments and 
 '              right tab stops in addition to fonts and indents.
@@ -475,6 +606,18 @@ Private Function BenDigitsAll() As String
     BenDigitsAll = ChrW(&H9E7) & ChrW(&H9E8) & ChrW(&H9E9) & ChrW(&H9EA) & _
                    ChrW(&H9EB) & ChrW(&H9EC) & ChrW(&H9ED) & ChrW(&H9EE) & _
                    ChrW(&H9EF) & ChrW(&H9E6)
+End Function
+
+' =========================================================================
+' Private Function: IsValidLabelNextChar
+' Description: Returns True if the character following a label candidate is
+'              a valid delimiter (space, ), ., tab, vbCr, vbLf, or empty).
+'              Returns False for Bengali letters/vowel signs (prevents word
+'              matches like গতি or কোন).
+' =========================================================================
+Private Function IsValidLabelNextChar(ByVal ch As String) As Boolean
+    IsValidLabelNextChar = (ch = " " Or ch = ")" Or ch = "." Or _
+                            ch = vbTab Or ch = vbCr Or ch = vbLf Or ch = "")
 End Function
 
 ' =========================================================================

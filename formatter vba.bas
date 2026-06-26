@@ -154,6 +154,9 @@ Private Sub Execute_CQ_Formatting()
     ' --- General: Clean redundant empty paragraphs ---
     Call GeneralCleanup
     
+    ' --- Merge: Merge number-only lines with CQ sub-question paragraphs ---
+    Call MergeCQNumberAndLabel
+    
     ' --- Step 5: Preserve Tab after Digit and Ddari (General Preparation) ---
     Call PerformWildcardReplace("([" & BenDigits() & "]{1,2})" & BenDdari() & "^9", "\1" & BenDdari() & "^t")
     
@@ -164,7 +167,7 @@ Private Sub Execute_CQ_Formatting()
     ' Applied: Alignment = Justify, Hanging Indent = 0.3"
     Call PerformWildcardReplace(findTxt:="([" & BenDigits() & "]{1,2})" & BenDdari() & "[ ]{1,}", replaceTxt:="\1" & BenDdari() & "^t", hangingIndentVal:=0.3, alignVal:=wdAlignParagraphJustify)
     
-    ' --- Step 3: Format CQ sub-question labels (ক, খ, গ, ঘ) with tab + hanging indent ---
+    ' --- Step 3: Format CQ sub-question labels (LeftIndent = 0.3") ---
     Call FormatCQLabels
     
     ' --- Step 6: Move Marks to the Right ---
@@ -174,6 +177,9 @@ Private Sub Execute_CQ_Formatting()
     ' --- Step 7: Move Marks in Parentheses to the Right ---
     ' Applied: Tab Stop Position = 5" (Right Aligned, consistent with Step 6)
     Call PerformWildcardReplace(findTxt:="([\?" & BenDdari() & "])[ ]{1,}(\([" & BenDigits() & "]{1,2}\))", replaceTxt:="\1^t\2", tabStopPos:=5, tabStopAlign:=wdAlignTabRight)
+    
+    ' --- Step 9: Right-align trailing marks in CQ paragraphs (no preceding Ddari/?) ---
+    Call AlignCQTrailingMarks
     
     ' --- Step 8: Stimulus paragraph indent ---
     Call FormatStimulusIndent
@@ -503,15 +509,151 @@ Private Sub FormatCQLabels()
             foundLabel = True
         End If
         
+        ' Skip if paragraph starts with Bengali digit(s) + Ddari (already merged or number-only)
+        If firstCh >= ChrW(&H9E6) And firstCh <= ChrW(&H9EF) Then GoTo NextPara
+        
         If foundLabel Then
-            With para.Range.ParagraphFormat
-                .LeftIndent = Application.InchesToPoints(0.6)
-                .FirstLineIndent = Application.InchesToPoints(-0.3)
-                .Alignment = wdAlignParagraphJustify
-            End With
+            para.Range.ParagraphFormat.LeftIndent = Application.InchesToPoints(0.3)
         End If
         
 NextPara:
+    Next para
+End Sub
+
+' =========================================================================
+' Private Sub: MergeCQNumberAndLabel
+' Description: Merges a number-only paragraph (e.g. ১০।) with its next
+'              paragraph if the next starts with a CQ sub-question label
+'              (ক, খ, গ, ঘ). Replaces paragraph mark with a tab and applies
+'              0.6" hanging indent.
+' =========================================================================
+Private Sub MergeCQNumberAndLabel()
+    Dim i As Long
+    Dim para As Paragraph
+    Dim ptxt As String
+    Dim nextPara As Paragraph
+    Dim nextTxt As String
+    Dim mergeRange As Range
+    Dim letters As String
+    
+    letters = BenLetters()
+    i = 1
+    
+    Do While i < ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        ptxt = Trim(para.Range.Text)
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        
+        ' Check if current paragraph is number-only (digits + Ddari)
+        If IsNumberOnlyLine(ptxt) Then
+            Set nextPara = ActiveDocument.Paragraphs(i + 1)
+            nextTxt = nextPara.Range.Text
+            Do While Len(nextTxt) > 0 And (Right(nextTxt, 1) = vbCr Or Right(nextTxt, 1) = vbLf)
+                nextTxt = Left(nextTxt, Len(nextTxt) - 1)
+            Loop
+            
+            ' Check if next paragraph starts with a CQ label
+            If StartsWithCQLabel(nextTxt) Then
+                ' Build range covering both paragraphs (excluding nextPara's final ^p)
+                Set mergeRange = ActiveDocument.Range(para.Range.Start, nextPara.Range.End - 1)
+                
+                ' Replace the ^p separating them with a tab
+                With mergeRange.Find
+                    .ClearFormatting
+                    .Replacement.ClearFormatting
+                    .Text = "^p"
+                    .Replacement.Text = "^t"
+                    .Execute Replace:=wdReplaceOne
+                End With
+                
+                ' Apply formatting to merged paragraph
+                With ActiveDocument.Paragraphs(i).Range.ParagraphFormat
+                    .LeftIndent = Application.InchesToPoints(0.6)
+                    .FirstLineIndent = Application.InchesToPoints(-0.6)
+                    .Alignment = wdAlignParagraphJustify
+                End With
+                
+                ' Don't increment i — paragraphs shifted up after merge
+            Else
+                i = i + 1
+            End If
+        Else
+            i = i + 1
+        End If
+    Loop
+End Sub
+
+' =========================================================================
+' Private Sub: AlignCQTrailingMarks
+' Description: For CQ sub-question paragraphs ending with Bengali digits
+'              (mark value), inserts a tab before the trailing digit and
+'              sets a right tab stop at 5". Catches marks that don't have
+'              a preceding Ddari or question mark.
+' =========================================================================
+Private Sub AlignCQTrailingMarks()
+    Dim para As Paragraph
+    Dim ptxt As String
+    Dim rng As Range
+    Dim lastCh As String, prevCh As String
+    Dim digits As String
+    
+    digits = BenDigitsAll()
+    
+    For Each para In ActiveDocument.Paragraphs
+        ptxt = para.Range.Text
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        If Len(ptxt) = 0 Then GoTo NextTPara
+        
+        ' Only process CQ paragraphs (start with CQ label or digits+Ddari)
+        If Not StartsWithCQLabel(ptxt) And Not StartsWithNumberDdari(ptxt) Then
+            GoTo NextTPara
+        End If
+        
+        ' Check if last character is a Bengali digit (1-2 digits)
+        lastCh = Right(ptxt, 1)
+        If InStr(digits, lastCh) = 0 Then GoTo NextTPara
+        
+        ' Check if there's already a tab before the digit
+        If Len(ptxt) >= 2 Then
+            prevCh = Mid(ptxt, Len(ptxt) - 1, 1)
+            If prevCh = vbTab Then GoTo NextTPara
+        End If
+        
+        ' Also check for 2-digit marks (e.g. ১০, ১২)
+        Dim markLen As Long
+        markLen = 1
+        If Len(ptxt) >= 2 Then
+            Dim secondLast As String
+            secondLast = Mid(ptxt, Len(ptxt) - 1, 1)
+            If InStr(digits, secondLast) > 0 Then
+                markLen = 2
+            End If
+        End If
+        
+        ' Insert tab before the trailing mark
+        Set rng = para.Range
+        rng.Start = rng.End - 1
+        rng.Collapse Direction:=wdCollapseStart
+        
+        ' If 2-digit mark, move back one more
+        If markLen = 2 Then
+            rng.Start = rng.Start - 1
+            rng.End = rng.Start
+        End If
+        
+        rng.Text = vbTab
+        
+        ' Set right tab stop at 5"
+        With para.Range.ParagraphFormat
+            .TabStops.ClearAll
+            .TabStops.Add Position:=Application.InchesToPoints(5), Alignment:=wdAlignTabRight
+        End With
+        
+NextTPara:
     Next para
 End Sub
 
@@ -676,6 +818,100 @@ End Function
 Private Function IsValidLabelNextChar(ByVal ch As String) As Boolean
     IsValidLabelNextChar = (ch = " " Or ch = ")" Or ch = "." Or _
                             ch = vbTab Or ch = vbCr Or ch = vbLf Or ch = "")
+End Function
+
+' =========================================================================
+' Private Function: IsNumberOnlyLine
+' Description: Returns True if the text consists solely of Bengali digits
+'              followed by a Ddari (।), e.g. "১০।", "৩।"
+' =========================================================================
+Private Function IsNumberOnlyLine(ByVal txt As String) As Boolean
+    Dim t As String
+    Dim ddari As String
+    ddari = ChrW(&H964)
+    
+    t = Trim(txt)
+    If Len(t) < 2 Then Exit Function
+    If Right(t, 1) <> ddari Then Exit Function
+    
+    t = Left(t, Len(t) - 1)
+    If Len(t) = 0 Then Exit Function
+    
+    Dim i As Long
+    For i = 1 To Len(t)
+        Dim c As String
+        c = Mid(t, i, 1)
+        If c < ChrW(&H9E6) Or c > ChrW(&H9EF) Then Exit Function
+    Next i
+    
+    IsNumberOnlyLine = True
+End Function
+
+' =========================================================================
+' Private Function: StartsWithNumberDdari
+' Description: Returns True if the text starts with 1-2 Bengali digits
+'              followed by a Ddari (।), e.g. "১০।", "৩। some text"
+' =========================================================================
+Private Function StartsWithNumberDdari(ByVal txt As String) As Boolean
+    Dim t As String
+    Dim ddari As String
+    ddari = ChrW(&H964)
+    
+    t = Trim(txt)
+    If Len(t) < 2 Then Exit Function
+    
+    ' First char must be a Bengali digit
+    Dim firstCh As String
+    firstCh = Left(t, 1)
+    If firstCh < ChrW(&H9E6) Or firstCh > ChrW(&H9EF) Then Exit Function
+    
+    ' Check for Ddari at position 2 or 3 (1-digit or 2-digit number)
+    If Mid(t, 2, 1) = ddari Then
+        StartsWithNumberDdari = True
+    ElseIf Len(t) >= 3 And Mid(t, 2, 1) >= ChrW(&H9E6) And Mid(t, 2, 1) <= ChrW(&H9EF) And Mid(t, 3, 1) = ddari Then
+        StartsWithNumberDdari = True
+    End If
+End Function
+
+' =========================================================================
+' Private Function: StartsWithCQLabel
+' Description: Returns True if the text starts with one of the CQ
+'              sub-question label patterns: (ক), ক., খ), গ (bare + space).
+'              Uses IsValidLabelNextChar to prevent matches inside words.
+' =========================================================================
+Private Function StartsWithCQLabel(ByVal txt As String) As Boolean
+    Dim t As String
+    Dim letters As String
+    Dim firstCh As String, secondCh As String, thirdCh As String
+    
+    letters = BenLetters()
+    t = Trim(txt)
+    If Len(t) = 0 Then Exit Function
+    
+    firstCh = Left(t, 1)
+    secondCh = Mid(t, 2, 1)
+    thirdCh = Mid(t, 3, 1)
+    
+    ' Pattern 1: (ক)
+    If firstCh = "(" And InStr(letters, secondCh) > 0 And thirdCh = ")" _
+       And IsValidLabelNextChar(Mid(t, 4, 1)) Then
+        StartsWithCQLabel = True
+        Exit Function
+    End If
+    
+    ' Pattern 2: ক. or খ)
+    If InStr(letters, firstCh) > 0 _
+       And (secondCh = "." Or secondCh = ")") _
+       And IsValidLabelNextChar(thirdCh) Then
+        StartsWithCQLabel = True
+        Exit Function
+    End If
+    
+    ' Pattern 3: গ (bare letter + space)
+    If InStr(letters, firstCh) > 0 And secondCh = " " Then
+        StartsWithCQLabel = True
+        Exit Function
+    End If
 End Function
 
 ' =========================================================================

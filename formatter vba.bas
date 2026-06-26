@@ -1,5 +1,5 @@
 ' V2.6.0 — Last updated: 2026-06-26
-Private Const APP_VERSION As String = "V2.6.0"
+Private Const APP_VERSION As String = "V2.6.1"
 
 ' =========================================================================
 ' Unified Question Paper Formatter (MCQ & CQ) with Auto-Shortcut
@@ -513,7 +513,10 @@ Private Sub FormatCQLabels()
         If firstCh >= ChrW(&H9E6) And firstCh <= ChrW(&H9EF) Then GoTo NextPara
         
         If foundLabel Then
-            para.Range.ParagraphFormat.LeftIndent = Application.InchesToPoints(0.3)
+            With para.Range.ParagraphFormat
+                .LeftIndent = Application.InchesToPoints(0.6)
+                .FirstLineIndent = Application.InchesToPoints(-0.3)
+            End With
         End If
         
 NextPara:
@@ -568,11 +571,10 @@ Private Sub MergeCQNumberAndLabel()
                     .Execute Replace:=wdReplaceOne
                 End With
                 
-                ' Apply formatting to merged paragraph
+                ' Apply hanging indent to merged paragraph
                 With ActiveDocument.Paragraphs(i).Range.ParagraphFormat
-                    .LeftIndent = Application.InchesToPoints(0.6)
-                    .FirstLineIndent = Application.InchesToPoints(-0.6)
-                    .Alignment = wdAlignParagraphJustify
+                    .LeftIndent = Application.InchesToPoints(0.3)
+                    .FirstLineIndent = Application.InchesToPoints(-0.3)
                 End With
                 
                 ' Don't increment i — paragraphs shifted up after merge

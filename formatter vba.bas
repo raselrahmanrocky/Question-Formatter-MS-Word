@@ -1,5 +1,5 @@
-' V2.6.0 — Last updated: 2026-06-26
-Private Const APP_VERSION As String = "V2.6.1"
+' V2.6.2 — Last updated: 2026-06-26
+Private Const APP_VERSION As String = "V2.6.2"
 
 ' =========================================================================
 ' Unified Question Paper Formatter (MCQ & CQ) with Auto-Shortcut
@@ -11,6 +11,8 @@ Sub AutoExec()
     Application.CustomizationContext = NormalTemplate
     KeyBindings.Add KeyCode:=BuildKeyCode(wdKeyControl, wdKeyAlt, wdKeyQ), _
         KeyCategory:=wdKeyCategoryMacro, Command:="Format_Question_Paper"
+    KeyBindings.Add KeyCode:=BuildKeyCode(wdKeyAlt, wdKeyP), _
+        KeyCategory:=wdKeyCategoryMacro, Command:="ConvertToPDF"
 End Sub
 
 Sub SetShortcutNow()
@@ -36,7 +38,8 @@ Sub Format_Question_Paper()
     ' Displaying Input Box to prevent Unicode character errors in VBA prompt
     userInput = InputBox("Please enter a number to select formatting type:" & vbNewLine & vbNewLine & _
                          "Type 1 : MCQ (Multiple Choice Questions)" & vbNewLine & _
-                         "Type 2 : CQ (Creative Questions)" & vbNewLine & vbNewLine & _
+                         "Type 2 : CQ (Creative Questions)" & vbNewLine & _
+                         "Type 3 : English Questions" & vbNewLine & vbNewLine & _
                          "Leave blank or click Cancel to exit.", "Select Question Type - " & APP_VERSION)
                          
     ' Input verification and routing
@@ -52,10 +55,16 @@ Sub Format_Question_Paper()
         Application.ScreenUpdating = True
         MsgBox "CQ Formatting completed successfully!", vbInformation, "Completed - " & APP_VERSION
         
+    ElseIf Trim(userInput) = "3" Then
+        Application.ScreenUpdating = False
+        Call Execute_English_Formatting
+        Application.ScreenUpdating = True
+        MsgBox "English Formatting completed successfully!", vbInformation, "Completed - " & APP_VERSION
+        
     ElseIf Trim(userInput) = "" Then
         MsgBox "Formatting process canceled.", vbInformation, "Canceled - " & APP_VERSION
     Else
-        MsgBox "Invalid choice! Please enter either 1 or 2.", vbExclamation, "Error - " & APP_VERSION
+        MsgBox "Invalid choice! Please enter 1, 2, or 3.", vbExclamation, "Error - " & APP_VERSION
     End If
     
     Exit Sub
@@ -187,6 +196,58 @@ Private Sub Execute_CQ_Formatting()
     Exit Sub
 CQErr:
     MsgBox "Error " & Err.Number & " at CQ Step " & Err.Description, vbExclamation, "CQ Error - " & APP_VERSION
+End Sub
+
+' =========================================================================
+' Private Sub: Execute_English_Formatting
+' Description: Step-by-step English Question Formatting
+' =========================================================================
+Private Sub Execute_English_Formatting()
+    On Error GoTo EngErr
+    ' --- General: Replace manual line breaks with paragraph marks ---
+    With ActiveDocument.Content.Find
+        .ClearFormatting
+        .Replacement.ClearFormatting
+        .Text = "^l"
+        .Replacement.Text = "^p"
+        .Forward = True
+        .Wrap = wdFindContinue
+        .Format = False
+        .MatchWildcards = False
+        .Execute Replace:=wdReplaceAll
+    End With
+    
+    ' --- General: Clean redundant empty paragraphs ---
+    Call GeneralCleanup
+    
+    ' --- Merge: Merge number-only lines with English sub-question paragraphs ---
+    Call MergeEnglishNumberAndLabel
+    
+    ' --- Step 12: Remove Extra Spaces ---
+    Call PerformWildcardReplace("[ ]{2,}", " ")
+    
+    ' --- Step 1: Question Number Auto-Align (Hanging Indent 0.3") ---
+    Call PerformWildcardReplace(findTxt:="([0-9]{1,3})\.([ ]{1,})", replaceTxt:="\1.^t", hangingIndentVal:=0.3, alignVal:=wdAlignParagraphJustify)
+    
+    ' --- Step 3: Format English sub-question labels (0.6" left indent) ---
+    Call FormatEnglishLabels
+    
+    ' --- Step 6: Move Marks to the Right ---
+    ' Applied: Tab Stop Position = 5" (Right Aligned)
+    Call PerformWildcardReplace(findTxt:="([\?\.])[ ]{1,}([0-9]{1,2})", replaceTxt:="\1^t\2", tabStopPos:=5, tabStopAlign:=wdAlignTabRight)
+    
+    ' --- Step 7: Move Marks in Parentheses to the Right ---
+    Call PerformWildcardReplace(findTxt:="([\?\.])[ ]{1,}(\([0-9]{1,2}\))", replaceTxt:="\1^t\2", tabStopPos:=5, tabStopAlign:=wdAlignTabRight)
+    
+    ' --- Step 9: Right-align trailing marks in English paragraphs ---
+    Call AlignEnglishTrailingMarks
+    
+    ' --- Step 8: Stimulus paragraph indent ---
+    Call FormatEnglishStimulus
+    
+    Exit Sub
+EngErr:
+    MsgBox "Error " & Err.Number & " at English Step " & Err.Description, vbExclamation, "English Error - " & APP_VERSION
 End Sub
 
 ' =========================================================================
@@ -660,6 +721,247 @@ NextTPara:
 End Sub
 
 ' =========================================================================
+' Private Sub: MergeEnglishNumberAndLabel
+' Description: Merges a number-only paragraph (e.g. "1.") with its next
+'              paragraph if the next starts with an English sub-question
+'              label ((a), a., a), a ). Replaces paragraph mark with a tab
+'              and applies 0.6" hanging indent.
+' =========================================================================
+Private Sub MergeEnglishNumberAndLabel()
+    Dim i As Long
+    Dim para As Paragraph
+    Dim ptxt As String
+    Dim nextPara As Paragraph
+    Dim nextTxt As String
+    Dim mergeRange As Range
+    
+    i = 1
+    Do While i < ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        ptxt = Trim(para.Range.Text)
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        
+        If IsEnglishNumberOnlyLine(ptxt) Then
+            Set nextPara = ActiveDocument.Paragraphs(i + 1)
+            nextTxt = nextPara.Range.Text
+            Do While Len(nextTxt) > 0 And (Right(nextTxt, 1) = vbCr Or Right(nextTxt, 1) = vbLf)
+                nextTxt = Left(nextTxt, Len(nextTxt) - 1)
+            Loop
+            
+            If StartsWithEnglishLabel(nextTxt) Then
+                Set mergeRange = ActiveDocument.Range(para.Range.Start, nextPara.Range.End - 1)
+                With mergeRange.Find
+                    .ClearFormatting
+                    .Replacement.ClearFormatting
+                    .Text = "^p"
+                    .Replacement.Text = "^t"
+                    .Execute Replace:=wdReplaceOne
+                End With
+                
+                ' Apply hanging indent to merged paragraph
+                With ActiveDocument.Paragraphs(i).Range.ParagraphFormat
+                    .LeftIndent = Application.InchesToPoints(0.6)
+                    .FirstLineIndent = Application.InchesToPoints(-0.3)
+                End With
+            Else
+                i = i + 1
+            End If
+        Else
+            i = i + 1
+        End If
+    Loop
+End Sub
+
+' =========================================================================
+' Private Sub: FormatEnglishLabels
+' Description: Paragraph-loop approach to detect English sub-question
+'              labels (a-z) at position 0 in all decoration styles:
+'              (a), a., a), a (bare with space). Inserts a tab after the
+'              label delimiter and applies 0.6" left + -0.3" hanging indent.
+' =========================================================================
+Private Sub FormatEnglishLabels()
+    Dim para As Paragraph
+    Dim ptxt As String
+    Dim rng As Range
+    Dim foundLabel As Boolean
+    Dim firstCh As String, secondCh As String, thirdCh As String, fourthCh As String
+    
+    For Each para In ActiveDocument.Paragraphs
+        ptxt = para.Range.Text
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        If Len(ptxt) = 0 Then GoTo NextEPara
+        
+        foundLabel = False
+        firstCh = LCase(Left(ptxt, 1))
+        secondCh = LCase(Mid(ptxt, 2, 1))
+        thirdCh = Mid(ptxt, 3, 1)
+        fourthCh = Mid(ptxt, 4, 1)
+        
+        Set rng = para.Range
+        
+        ' Pattern 1: (a) — opening paren + letter + closing paren at position 0
+        If firstCh = "(" And secondCh >= "a" And secondCh <= "z" And thirdCh = ")" _
+           And IsValidLabelNextChar(fourthCh) Then
+            rng.Start = rng.Start + 3
+            rng.End = rng.Start
+            If fourthCh = " " Then
+                rng.End = rng.Start + 1
+            End If
+            rng.Text = vbTab
+            foundLabel = True
+        End If
+        
+        ' Pattern 2: a. or a) — letter + dot or closing paren at position 0
+        If Not foundLabel And firstCh >= "a" And firstCh <= "z" _
+           And (secondCh = "." Or secondCh = ")") _
+           And IsValidLabelNextChar(thirdCh) Then
+            rng.Start = rng.Start + 2
+            rng.End = rng.Start
+            If thirdCh = " " Then
+                rng.End = rng.Start + 1
+            End If
+            rng.Text = vbTab
+            foundLabel = True
+        End If
+        
+        ' Pattern 3: a (bare letter followed by space at position 0)
+        If Not foundLabel And firstCh >= "a" And firstCh <= "z" _
+           And secondCh = " " Then
+            rng.Start = rng.Start + 1
+            rng.End = rng.Start + 1
+            rng.Text = vbTab
+            foundLabel = True
+        End If
+        
+        ' Skip if paragraph starts with English digit(s) + period (already merged or number-only)
+        If firstCh >= "0" And firstCh <= "9" Then GoTo NextEPara
+        
+        If foundLabel Then
+            With para.Range.ParagraphFormat
+                .LeftIndent = Application.InchesToPoints(0.6)
+                .FirstLineIndent = Application.InchesToPoints(-0.3)
+            End With
+        End If
+        
+NextEPara:
+    Next para
+End Sub
+
+' =========================================================================
+' Private Sub: AlignEnglishTrailingMarks
+' Description: For English sub-question paragraphs ending with English
+'              digits (mark value), inserts a tab before the trailing
+'              digit and sets a right tab stop at 5".
+' =========================================================================
+Private Sub AlignEnglishTrailingMarks()
+    Dim para As Paragraph
+    Dim ptxt As String
+    Dim rng As Range
+    Dim lastCh As String, prevCh As String
+    
+    For Each para In ActiveDocument.Paragraphs
+        ptxt = para.Range.Text
+        Do While Len(ptxt) > 0 And (Right(ptxt, 1) = vbCr Or Right(ptxt, 1) = vbLf)
+            ptxt = Left(ptxt, Len(ptxt) - 1)
+        Loop
+        If Len(ptxt) = 0 Then GoTo NextEMPara
+        
+        ' Only process English CQ paragraphs
+        If Not StartsWithEnglishLabel(ptxt) And Not IsEnglishNumberOnlyLine(ptxt) Then
+            GoTo NextEMPara
+        End If
+        
+        ' Check if last character is an English digit (1-2 digits)
+        lastCh = Right(ptxt, 1)
+        If lastCh < "0" Or lastCh > "9" Then GoTo NextEMPara
+        
+        ' Check if there's already a tab before the digit
+        If Len(ptxt) >= 2 Then
+            prevCh = Mid(ptxt, Len(ptxt) - 1, 1)
+            If prevCh = vbTab Then GoTo NextEMPara
+        End If
+        
+        ' Check for 2-digit marks (e.g. 10, 12)
+        Dim markLen As Long
+        markLen = 1
+        If Len(ptxt) >= 2 Then
+            Dim secondLast As String
+            secondLast = Mid(ptxt, Len(ptxt) - 1, 1)
+            If secondLast >= "0" And secondLast <= "9" Then
+                markLen = 2
+            End If
+        End If
+        
+        ' Insert tab before the trailing mark
+        Set rng = para.Range
+        rng.Start = rng.End - 1
+        rng.Collapse Direction:=wdCollapseStart
+        
+        If markLen = 2 Then
+            rng.Start = rng.Start - 1
+            rng.End = rng.Start
+        End If
+        
+        rng.Text = vbTab
+        
+        ' Set right tab stop at 5"
+        With para.Range.ParagraphFormat
+            .TabStops.ClearAll
+            .TabStops.Add Position:=Application.InchesToPoints(5), Alignment:=wdAlignTabRight
+        End With
+        
+NextEMPara:
+    Next para
+End Sub
+
+' =========================================================================
+' Private Sub: FormatEnglishStimulus
+' Description: Finds trigger paragraphs ending with ":" and applies 0.3"
+'              left indent + justified alignment to the next paragraph.
+'              Skips if next paragraph starts with an English digit (0-9).
+' =========================================================================
+Private Sub FormatEnglishStimulus()
+    Dim i As Long
+    Dim paraText As String
+    Dim firstCh As String
+    
+    For i = 1 To ActiveDocument.Paragraphs.Count - 1
+        paraText = Trim(ActiveDocument.Paragraphs(i).Range.Text)
+        Do While Len(paraText) > 0 And (Right(paraText, 1) = vbCr Or Right(paraText, 1) = vbLf)
+            paraText = Left(paraText, Len(paraText) - 1)
+        Loop
+        
+        ' Trigger: paragraph ends with colon
+        If Right(paraText, 1) = ":" Then
+            Dim target As Paragraph
+            Set target = ActiveDocument.Paragraphs(i + 1)
+            
+            ' Skip if next para starts with English digit 0-9
+            Dim nextText As String
+            nextText = Trim(target.Range.Text)
+            If Len(nextText) > 0 Then
+                firstCh = Left(nextText, 1)
+                If firstCh >= "0" And firstCh <= "9" Then
+                    GoTo NextEPara
+                End If
+            End If
+            
+            ' Apply: 0.3" left indent, no first-line indent, justified
+            With target.Range.ParagraphFormat
+                .LeftIndent = Application.InchesToPoints(0.3)
+                .FirstLineIndent = 0
+                .Alignment = wdAlignParagraphJustify
+            End With
+        End If
+NextEPara:
+    Next i
+End Sub
+
+' =========================================================================
 ' Private Sub: FormatStimulusIndent
 ' Description: Finds trigger paragraphs ending with ":" and applies 0.3"
 '              left indent + justified alignment to the next paragraph.
@@ -917,6 +1219,67 @@ Private Function StartsWithCQLabel(ByVal txt As String) As Boolean
 End Function
 
 ' =========================================================================
+' Private Function: IsEnglishNumberOnlyLine
+' Description: Returns True if the text consists solely of English digits
+'              followed by a period (.), e.g. "1.", "12."
+' =========================================================================
+Private Function IsEnglishNumberOnlyLine(ByVal txt As String) As Boolean
+    Dim t As String
+    t = Trim(txt)
+    If Len(t) < 2 Then Exit Function
+    If Right(t, 1) <> "." Then Exit Function
+    t = Left(t, Len(t) - 1)
+    If Len(t) = 0 Then Exit Function
+    Dim i As Long
+    For i = 1 To Len(t)
+        Dim c As String
+        c = Mid(t, i, 1)
+        If c < "0" Or c > "9" Then Exit Function
+    Next i
+    IsEnglishNumberOnlyLine = True
+End Function
+
+' =========================================================================
+' Private Function: StartsWithEnglishLabel
+' Description: Returns True if the text starts with one of the English
+'              sub-question label patterns: (a), a., a), a (bare + space).
+'              Uses IsValidLabelNextChar to prevent matches inside words.
+'              Supports a-z, case-insensitive.
+' =========================================================================
+Private Function StartsWithEnglishLabel(ByVal txt As String) As Boolean
+    Dim t As String
+    Dim firstCh As String, secondCh As String, thirdCh As String
+    
+    t = Trim(txt)
+    If Len(t) = 0 Then Exit Function
+    
+    firstCh = LCase(Left(t, 1))
+    secondCh = LCase(Mid(t, 2, 1))
+    thirdCh = Mid(t, 3, 1)
+    
+    ' Pattern 1: (a)
+    If firstCh = "(" And secondCh >= "a" And secondCh <= "z" And thirdCh = ")" _
+       And IsValidLabelNextChar(Mid(t, 4, 1)) Then
+        StartsWithEnglishLabel = True
+        Exit Function
+    End If
+    
+    ' Pattern 2: a. or a)
+    If firstCh >= "a" And firstCh <= "z" _
+       And (secondCh = "." Or secondCh = ")") _
+       And IsValidLabelNextChar(thirdCh) Then
+        StartsWithEnglishLabel = True
+        Exit Function
+    End If
+    
+    ' Pattern 3: a (bare letter + space)
+    If firstCh >= "a" And firstCh <= "z" And secondCh = " " Then
+        StartsWithEnglishLabel = True
+        Exit Function
+    End If
+End Function
+
+' =========================================================================
 ' Private Function: PatternExists
 ' Description: Checks if a specific wildcard pattern exists anywhere in the document
 ' =========================================================================
@@ -1000,5 +1363,30 @@ Private Sub GeneralCleanup()
         If Len(lastText) = 0 Then
             ActiveDocument.Paragraphs(ActiveDocument.Paragraphs.Count).Range.Delete
         End If
+    End If
+End Sub
+
+' =========================================================================
+' PDF Conversion: Convert selected .doc/.docx/.docm files to PDF
+' Shortcut Key: Alt + P
+' =========================================================================
+
+Sub ConvertToPDF()
+    Dim fileDialog As fileDialog
+    Dim selectedFile As Variant
+    Dim wordDoc As Document
+    Dim pdfPath As String
+
+    Set fileDialog = Application.fileDialog(msoFileDialogFilePicker)
+    fileDialog.AllowMultiSelect = True
+
+    If fileDialog.Show = -1 Then
+        For Each selectedFile In fileDialog.SelectedItems
+            Set wordDoc = Documents.Open(selectedFile)
+            pdfPath = Left(selectedFile, InStrRev(selectedFile, ".") - 1) & ".pdf"
+            wordDoc.ExportAsFixedFormat OutputFileName:=pdfPath, ExportFormat:=wdExportFormatPDF
+            wordDoc.Close SaveChanges:=False
+        Next selectedFile
+        MsgBox "All selected files have been successfully converted to PDF!", vbInformation, "PDF Converter - " & APP_VERSION
     End If
 End Sub
